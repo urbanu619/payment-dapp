@@ -1,24 +1,23 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <title>多币种支付界面</title>
+  <title>支付界面（支持USDT）</title>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 </head>
 <body>
-  <h2>支付 ERC20（USDT / DAI / BUSD）</h2>
-
+  <h2>使用ERC20代币支付</h2>
   <button onclick="connectWallet()">连接钱包</button>
-  <p id="wallet">未连接</p>
+  <p id="wallet">钱包未连接</p>
 
-  <label>代币合约地址：</label><br>
-  <input id="tokenAddress" placeholder="输入 USDT 或 DAI 地址" style="width: 400px;"><br><br>
+  <label>代币合约地址（如USDT）:</label><br>
+  <input id="tokenAddress" placeholder="0xdAC17F..."><br><br>
 
   <label>支付金额：</label><br>
-  <input id="amount" placeholder="如 10"><br><br>
+  <input id="amount" placeholder="10"><br><br>
 
-  <label>备注（订单号/用户ID/用途等）：</label><br>
-  <input id="note" placeholder="例如：订单A1001"><br><br>
+  <label>备注（订单号等）：</label><br>
+  <input id="note" placeholder="例如 order123"><br><br>
 
   <button onclick="approve()">1️⃣ 授权代币</button>
   <button onclick="pay()">2️⃣ 支付</button>
@@ -26,50 +25,78 @@
   <p id="status"></p>
 
   <script>
-    const CONTRACT_ADDRESS = "你的合约地址"; // TODO：替换成你的合约地址
+    const CONTRACT_ADDRESS = "你的合约地址"; // 替换为你自己的智能合约地址
     const ERC20_ABI = [
       "function approve(address spender, uint256 amount) public returns (bool)"
     ];
     const CONTRACT_ABI = [
-      "function pay(address token, uint256 amount, string calldata note) external",
+      "function pay(address token, uint256 amount, string calldata note) external"
     ];
 
     let provider, signer;
 
     async function connectWallet() {
       if (!window.ethereum) {
-        alert("请安装 MetaMask 扩展");
+        alert("请先安装 MetaMask 插件");
         return;
       }
-      provider = new ethers.providers.Web3Provider(window.ethereum);
-      await provider.send("eth_requestAccounts", []);
-      signer = provider.getSigner();
 
-      const address = await signer.getAddress();
-      document.getElementById("wallet").innerText = "已连接: " + address;
+      try {
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        const accounts = await provider.send("eth_requestAccounts", []);
+        if (accounts.length === 0) {
+          alert("MetaMask 没有可用账户，请先添加一个账户");
+          return;
+        }
+        signer = provider.getSigner();
+        document.getElementById("wallet").innerText = "钱包地址: " + accounts[0];
+      } catch (error) {
+        if (error.code === 4001) {
+          alert("连接被用户拒绝");
+        } else {
+          console.error("连接失败:", error);
+          alert("连接钱包失败，请检查控制台错误");
+        }
+      }
     }
 
     async function approve() {
-      const tokenAddress = document.getElementById("tokenAddress").value;
-      const amount = document.getElementById("amount").value;
+      try {
+        const tokenAddress = document.getElementById("tokenAddress").value;
+        const amount = document.getElementById("amount").value;
+        const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
 
-      const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
-      const tx = await tokenContract.approve(CONTRACT_ADDRESS, ethers.utils.parseUnits(amount, 6)); // USDT 默认 6 位小数
-      await tx.wait();
-      document.getElementById("status").innerText = "授权成功 ✅";
+        const tx = await tokenContract.approve(
+          CONTRACT_ADDRESS,
+          ethers.utils.parseUnits(amount, 6) // USDT 通常使用 6 位小数
+        );
+        await tx.wait();
+        document.getElementById("status").innerText = "授权成功 ✅";
+      } catch (err) {
+        console.error(err);
+        alert("授权失败：" + err.message);
+      }
     }
 
     async function pay() {
-      const tokenAddress = document.getElementById("tokenAddress").value;
-      const amount = document.getElementById("amount").value;
-      const note = document.getElementById("note").value;
+      try {
+        const tokenAddress = document.getElementById("tokenAddress").value;
+        const amount = document.getElementById("amount").value;
+        const note = document.getElementById("note").value;
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
-      const paymentContract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-      const tx = await paymentContract.pay(tokenAddress, ethers.utils.parseUnits(amount, 6), note);
-      await tx.wait();
-      document.getElementById("status").innerText = "支付成功 ✅";
+        const tx = await contract.pay(
+          tokenAddress,
+          ethers.utils.parseUnits(amount, 6),
+          note
+        );
+        await tx.wait();
+        document.getElementById("status").innerText = "支付成功 ✅";
+      } catch (err) {
+        console.error(err);
+        alert("支付失败：" + err.message);
+      }
     }
   </script>
 </body>
 </html>
-
